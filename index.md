@@ -1,2 +1,2 @@
 # PresentationVideoMaker
-[こちら](./recorder.html)
+[こちら](./dist/recorder.html)
