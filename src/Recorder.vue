@@ -199,18 +199,19 @@ watch(selectedVideo, (newSelection) => {
                     console.log('writable stream for video started');
                 },
                 async write(videoFrame){
-                    //canvasContext.save();
-                    //canvasContext.clearRect(captureSizeW, 0, videoSizeW, videoSizeH);
-
                     if(lastScreenFrame){
                         canvasContext.drawImage(lastScreenFrame, 0, 0, captureSizeW, captureSizeH);
                         lastScreenFrame.close();
                         lastScreenFrame = null;
                     }
 
-                    canvasContext.drawImage(videoFrame, captureSizeW, 0, videoSizeW, videoSizeH);
+                    canvasContext.save();
+                    //canvasContext.clearRect(captureSizeW, 0, videoSizeW, videoSizeH);
 
-                    //canvasContext.restore();
+                    canvasContext.scale(-1, 1);
+                    canvasContext.drawImage(videoFrame, -previewSizeW.value, 0, videoSizeW, videoSizeH);
+
+                    canvasContext.restore();
                     videoFrame.close();
                 },
                 close(){
