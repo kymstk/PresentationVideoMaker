@@ -36,18 +36,17 @@ let screenTrackProcessor = null;
 let lastScreenFrame = null;
 let canvasContext = null;
 let mimeType = null;
-const video = shallowReactive({
+const recording = shallowReactive({
     recorder: null,
     mediaStream: null,
     blob: null,
 })
 
 // states
-const recordable = computed(() => ( tracks.screen != null ))
-// const recording = ref(false);
-const recording = computed(() => (video.recorder != null && video.recorder.state != 'inactive'));
-const playable = computed(() => (video.blob != null && !recording.value));
-const playing = ref(false);
+const nowRecordable = computed(() => ( tracks.screen != null ))
+const nowRecording = computed(() => (recording.recorder != null && recording.recorder.state != 'inactive'));
+const nowPlayable = computed(() => (recording.blob != null && !nowRecording.value));
+const nowPlaying = ref(false);
 
 // variables for 'ref' binding
 const previewCanvas = ref(null);
@@ -481,25 +480,25 @@ function onScreenButtonClick(){
 }
 
 function onStopButtonClick(event){
-    if(recording.value){
-        video.recorder.stop();
+    if(nowRecording.value){
+        recording.recorder.stop();
     }
-    else if(playing.value){
+    else if(nowPlaying.value){
         previewCanvasStyle.visible = true;
         replayVideoStyle.visible = false;
 
         replayVideo.value.pause();
-        playing.value = false;
+        nowPlaying.value = false;
     }
 }
 
 function onPauseButtonClick(event){
-    if(recording.value){
-        if(video.recorder.state == 'recording')
-            video.recorder.pause();
-        else if(video.recorder.state == 'paused')
-            video.recorder.resume();
-    }else if(playing.value){
+    if(nowRecording.value){
+        if(recording.recorder.state == 'recording')
+            recording.recorder.pause();
+        else if(recording.recorder.state == 'paused')
+            recording.recorder.resume();
+    }else if(nowPlaying.value){
         replayVideo.value.pause();
     }
 }
@@ -507,11 +506,11 @@ function onPauseButtonClick(event){
 function onRecordButtonClick(event){
     const recordingTracks = Array();
 
-    if(video.blob != null){
+    if(recording.blob != null){
         if(! confirm('録画データがあります。削除して録画を開始してよろしいですか。')){
             return;
         }
-        video.blob = null;
+        recording.blob = null;
     }
 
     if(tracks.microphone == null){
@@ -533,15 +532,15 @@ function onRecordButtonClick(event){
     //tracks.screen.forEach((track) => {if(track.kind == 'audio') recordingTracks.push(track)});
 
     console.log('recording tracks:', recordingTracks);
-    video.mediaStream = new MediaStream(recordingTracks);
-    console.log('recording media:', video.mediaStream);
-    video.recorder = new MediaRecorder(video.mediaStream, {
+    recording.mediaStream = new MediaStream(recordingTracks);
+    console.log('recording media:', recording.mediaStream);
+    recording.recorder = new MediaRecorder(recording.mediaStream, {
         audioBitsPerSecond : 128000,
         videoBitsPerSecond : 4000000,
         'mimeType' : mimeType,
     });
-    console.log('recorder:', video.recorder);
-    video.recorder.ondataavailable = function(event){
+    console.log('recorder:', recording.recorder);
+    recording.recorder.ondataavailable = function(event){
         /*
         if(video.recorder.state == 'recording'){
             if(video.blob == null)
@@ -561,44 +560,44 @@ function onRecordButtonClick(event){
             video.blob = [video.blob, event.data];
         */
 
-        video.blob = event.data;
-        console.log(video.blob);
+        recording.blob = event.data;
+        console.log(recording.blob);
     }
-    video.recorder.onstop = function(event){
+    recording.recorder.onstop = function(event){
         console.log(event);
         if(tracks.canvas != null){
             tracks.canvas = null;
         }
 
         buttons_pause.value.style.animationName = '';
-        video.recorder = null;
+        recording.recorder = null;
     }
-    video.recorder.onerror = function(event){
+    recording.recorder.onerror = function(event){
         console.log(event);
         alert('録画中にエラーが発生しました:' + event.error);
 
-        video.recorder.onstop(event);
+        recording.recorder.onstop(event);
     }
-    video.recorder.onpause = function(event){
+    recording.recorder.onpause = function(event){
         console.log(event);
         buttons_pause.value.style.animationName = 'emphasis';
     }
-    video.recorder.onresume = function(event){
+    recording.recorder.onresume = function(event){
         console.log(event);
         buttons_pause.value.style.animationName = '';
     }
 
-    video.recorder.start();
+    recording.recorder.start();
 }
 
 function onPlayButtonClick(event){
-    if(video.blob == null){
+    if(recording.blob == null){
         alert('録画データがありません');
         return;
     }
 
     if(! replayVideoStyle.visible){
-        const blobURL = URL.createObjectURL(video.blob);
+        const blobURL = URL.createObjectURL(recording.blob);
 
         if(replayVideo.value.src != '')
             URL.revokeObjectURL(replayVideo.value.src);
@@ -609,16 +608,16 @@ function onPlayButtonClick(event){
     }
 
     replayVideo.value.play();
-    playing.value = true;
+    nowPlaying.value = true;
 }
 
 function onDownloadButtonClick(event){
     closeSelectors();
-    if(video.blob != null){
+    if(recording.blob != null){
         if(event.target.href != '')
             URL.revokeObjectURL(event.target.href);
 
-        event.target.href = URL.createObjectURL(video.blob);
+        event.target.href = URL.createObjectURL(recording.blob);
         event.target.download = filename_title + "." + (new Date()).toISOString() + "." + filename_ext; 
     }
 }
@@ -632,17 +631,17 @@ function onDownloadButtonClick(event){
 <div ref="control" class="relative text-red-500 bg-slate-800 text-6xl font-sans px-2 bottom-0 hover:!opacity-100" :style="controlStyle">
     <!-- <button :disabled="recording" class="disabled:text-red-100 disabled:bg-slate-300 pb-2 px-2">◉</button>-->
     <span class="text-blue-500 absolute right-2 font-serif pt-1">
-        <button type="button" name="screen"     :disabled="playing" class="disabled:opacity-25 px-2" @click="onScreenButtonClick">&#x1F4BB;&#xFE0E;</button>
-        <button type="button" name="video"      :disabled="recording | playing" class="disabled:opacity-25 px-2"  @click="onSelectorClick($event.target, 'videos')">&#x1F3A5;&#xFE0E;</button>
-        <button type="button" name="microphone" :disabled="recording | playing" class="disabled:opacity-25 px-2"  @click="onSelectorClick($event.target, 'microphones')">&#x1F3A4;&#xFE0E;</button>
-        <button type="button" name="speaker"    :disabled="recording" class="disabled:opacity-25 px-2 rotate-180 hidden" @click="onSelectorClick($event.target, 'speakers')">&#x1F56A;&#xFE0E;</button>
-        <a ref="button_download" class="px-2"  :class="{ 'opacity-25': !playable }" @click="onDownloadButtonClick">&#x1F4E5;&#xFE0E;</a>
+        <button type="button" name="screen"     :disabled="nowPlaying" class="disabled:opacity-25 px-2" @click="onScreenButtonClick">&#x1F4BB;&#xFE0E;</button>
+        <button type="button" name="video"      :disabled="nowRecording | nowPlaying" class="disabled:opacity-25 px-2"  @click="onSelectorClick($event.target, 'videos')">&#x1F3A5;&#xFE0E;</button>
+        <button type="button" name="microphone" :disabled="nowRecording | nowPlaying" class="disabled:opacity-25 px-2"  @click="onSelectorClick($event.target, 'microphones')">&#x1F3A4;&#xFE0E;</button>
+        <button type="button" name="speaker"    :disabled="nowRecording" class="disabled:opacity-25 px-2 rotate-180 hidden" @click="onSelectorClick($event.target, 'speakers')">&#x1F56A;&#xFE0E;</button>
+        <a ref="button_download" class="px-2"  :class="{ 'opacity-25': !nowPlayable }" @click="onDownloadButtonClick">&#x1F4E5;&#xFE0E;</a>
         <button type="button" id="menu" class="disabled:opacity-25 text-white px-2">☰</button>
     </span>
-    <button type="button" ref="buttons_record" :disabled="!(recordable & !recording & !playing)"  class="disabled:opacity-25 pb-2 px-2" @click="onRecordButtonClick">◉</button>
-    <button type="button" ref="buttons_pause"  :disabled="!(recording | playing)" class="disabled:opacity-25 pb-2 px-1 rotate-90 emphasis" @click="onPauseButtonClick">〓</button>
-    <button type="button" ref="buttons_stop"   :disabled="!(recording | playing)" class="disabled:opacity-25 pb-2 px-2" @click="onStopButtonClick">◼</button>
-    <button type="button" ref="buttons_play"   :disabled="!(playable)"  class="disabled:opacity-25 pb-2 px-2" @click="onPlayButtonClick">▶</button>
+    <button type="button" ref="buttons_record" :disabled="!(nowRecordable & !nowRecording & !nowPlaying)"  class="disabled:opacity-25 pb-2 px-2" @click="onRecordButtonClick">◉</button>
+    <button type="button" ref="buttons_pause"  :disabled="!(nowRecording | nowPlaying)" class="disabled:opacity-25 pb-2 px-1 rotate-90 emphasis" @click="onPauseButtonClick">〓</button>
+    <button type="button" ref="buttons_stop"   :disabled="!(nowRecording | nowPlaying)" class="disabled:opacity-25 pb-2 px-2" @click="onStopButtonClick">◼</button>
+    <button type="button" ref="buttons_play"   :disabled="!(nowPlayable)"  class="disabled:opacity-25 pb-2 px-2" @click="onPlayButtonClick">▶</button>
 </div>
 <div class="static">
     <select size=2
