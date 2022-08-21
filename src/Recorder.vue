@@ -40,6 +40,7 @@ const recording = shallowReactive({
     recorder: null,
     mediaStream: null,
     blob: null,
+    objectURL: null,
 })
 
 // states
@@ -490,14 +491,19 @@ function onPauseButtonClick(event){
 }
 
 function onRecordButtonClick(event){
-    const recordingTracks = Array();
-
-    if(recording.blob != null){
+    if(recording.blob == null){
+        // nop
+    }else if(recording.blob.constructor.name == 'Array' &&  recording.blob.length > 0){
         if(! confirm('録画データがあります。削除して録画を開始してよろしいですか。')){
             return;
         }
-        recording.blob = null;
     }
+    recording.blob = new Array();
+    if(recording.objectURL != null){
+        URL.revokeObjectURL(recording.objectURL);
+    }
+
+    const recordingTracks = Array();
 
     if(tracks.microphone == null){
         if(selectedMIC.value == null){
@@ -527,26 +533,7 @@ function onRecordButtonClick(event){
     });
     console.log('recorder:', recording.recorder);
     recording.recorder.ondataavailable = function(event){
-        /*
-        if(video.recorder.state == 'recording'){
-            if(video.blob == null)
-                video.blob = new Array();
-            else if(!('push' in video.blob)){
-                const tmp = video.blob;
-                video.blob = new Array();
-                video.blob.push(tmp);
-            }
-        }
-
-        if(video.blob == null)
-            video.blob = event.data;
-        else if('push' in video.blob)
-            video.blob.push(event.data);
-        else
-            video.blob = [video.blob, event.data];
-        */
-
-        recording.blob = event.data;
+        recording.blob.push(event.data);
         console.log(recording.blob);
     }
     recording.recorder.onstop = function(event){
@@ -555,6 +542,7 @@ function onRecordButtonClick(event){
             tracks.canvas = null;
         }
 
+        recording.objectURL = URL.createObjectURL(new Blob(recording.blob, { type: mimeType }));
         buttons_pause.value.style.animationName = '';
         recording.recorder = null;
     }
@@ -583,11 +571,7 @@ function onPlayButtonClick(event){
     }
 
     if(! replayVideoStyle.visible){
-        const blobURL = URL.createObjectURL(recording.blob);
-
-        if(replayVideo.value.src != '')
-            URL.revokeObjectURL(replayVideo.value.src);
-        replayVideo.value.src = blobURL
+        replayVideo.value.src = recording.objectURL;
 
         previewCanvasStyle.visible = false;
         replayVideoStyle.visible = true;
@@ -599,11 +583,8 @@ function onPlayButtonClick(event){
 
 function onDownloadButtonClick(event){
     closeSelectors();
-    if(recording.blob != null){
-        if(event.target.href != '')
-            URL.revokeObjectURL(event.target.href);
-
-        event.target.href = URL.createObjectURL(recording.blob);
+    if(recording.objectURL != null){
+        event.target.href = recording.objectURL;
         event.target.download = filename_title + "." + (new Date()).toISOString() + "." + filename_ext; 
     }
 }
