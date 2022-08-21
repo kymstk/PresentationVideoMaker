@@ -239,7 +239,11 @@ function _loadMicrophone(){
     }
     navigator.mediaDevices.getUserMedia({
         video: false,
-        audio: {deviceId: selectedMIC.value},
+        audio: {
+            deviceId: selectedMIC.value,
+            echoCancellation: false,
+            noiseSuppression: true,
+        },
     }).then((micMedia) => {
         tracks.microphone = micMedia.getTracks()
         /*
