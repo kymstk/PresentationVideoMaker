@@ -28,7 +28,6 @@ const tracks = shallowReactive({
     screen: null,
     video: null,
     microphone: null,
-    microphone: null,
     canvas: null,
 })
 let videoTrackProcessor = null;
@@ -42,6 +41,146 @@ const recording = shallowReactive({
     blob: null,
     objectURL: null,
 })
+// 仮想背景
+
+let virtualBGImage = ref(null);
+let bgSegmenter = null;
+const segmenterOnResults = {
+    blankBG(results){
+        canvasContext.save()
+        canvasContext.clearRect(captureSizeW, 0, videoSizeW, videoSizeH);
+        canvasContext.drawImage(results.segmentationMask, captureSizeW, 0, videoSizeW, videoSizeH)
+        
+        canvasContext.globalCompositeOperation = "source-in"
+        canvasContext.drawImage(results.image, captureSizeW, 0, videoSizeW, videoSizeH)
+        results.segmentationMask.close();
+        results.image.close();
+        
+        canvasContext.restore()
+
+        if(lastScreenFrame){
+            try{
+                canvasContext.drawImage(lastScreenFrame, 0, 0, captureSizeW, captureSizeH);
+            }catch(e){
+                console.debug(e)
+            }
+        }
+    },
+    virtBG(results){
+        canvasContext.save()
+        canvasContext.clearRect(captureSizeW, 0, videoSizeW, videoSizeH);
+        canvasContext.drawImage(results.segmentationMask, captureSizeW, 0, videoSizeW, videoSizeH)
+        
+        const thre = 128;
+        var id = canvasContext.getImageData(captureSizeW, 0, videoSizeW, videoSizeH)
+        for(let i = 3; i < id.data.length; i += 4){
+            id.data[i] = (id.data[i] > thre)? 255:0
+        }
+        canvasContext.putImageData(id, captureSizeW, 0)
+        
+        canvasContext.globalCompositeOperation = "source-in"
+        canvasContext.drawImage(results.image, captureSizeW, 0, videoSizeW, videoSizeH)
+        results.segmentationMask.close();
+        results.image.close();
+        
+        canvasContext.globalCompositeOperation = "destination-atop"
+        canvasContext.drawImage(virtualBGImage.value, captureSizeW, 0, videoSizeW, videoSizeH)
+
+        canvasContext.restore()
+
+        if(lastScreenFrame){
+            try{
+                canvasContext.drawImage(lastScreenFrame, 0, 0, captureSizeW, captureSizeH);
+            }catch(e){
+                console.debug(e)
+            }
+        }
+    },
+    blurBG(){
+
+    },
+}
+
+const background = reactive({
+    state: 'blank',
+    states: {normal:'そのまま', virtual:'仮想背景', blur:'ぼかし', blank:'背景抜き', },
+    get isNormal(){
+        return this.state == 'normal';
+    },
+    setNormal(){
+        this.state = 'normal';
+    },
+    get isVirtual(){
+        return this.state == 'virtual';
+    },
+    setVirtual(){
+        this.state = 'virtual';
+    },
+    get isBlur(){
+        return this.state == 'blur';
+    },
+    setBlur(){
+        this.state = 'blur';
+    },
+    get isBlank(){
+        return this.state == 'blank';
+    },
+    setBlank(){
+        this.state = 'blank';
+    },
+    getProcessor(){
+        switch(this.state){
+            case 'virtual':
+                if(virtualBGImage.value)
+                    return segmenterOnResults.virtBG;
+                else
+                    return segmenterOnResults.blankBG;
+                break;
+            case 'blur':
+                return segmenterOnResults.blurBG;
+                break;
+            case 'blank':
+                return segmenterOnResults.blankBG;
+                break;
+            default:
+                return null;
+        }
+    }
+})
+watch(background, (newstate, oldstate) => {
+    if(videoTrackProcessor == null)
+        return;
+    
+    const bgProcessor = background.getProcessor();
+    if(bgProcessor){
+        if(bgSegmenter == null){
+            bgSegmenter = new SelfieSegmentation({locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`;
+            }});
+            bgSegmenter.setOptions({
+                //   modelSelection: 0, // general model
+                modelSelection: 1, // landscape model
+            });
+        }
+
+        bgSegmenter.onResults(bgProcessor);
+    }else if(bgSegmenter){
+        bgSegmenter.close();
+        bgSegmenter = null;
+    }
+});
+watch(virtualBGImage, (newstate, oldstate) => {
+    if(videoTrackProcessor == null)
+        return;
+    if(!background.isVirtual)
+        return;
+    if(oldstate != null)
+        return;
+    if(bgSegmenter == null)
+        return;
+
+    bgSegmenter.onResults(background.getProcessor());
+});
 
 // states
 const nowRecordable = computed(() => ( tracks.screen != null ))
@@ -57,16 +196,19 @@ const control = ref(null);
 const videos = ref(null);
 const microphones = ref(null);
 const speakers = ref(null);
+const menu = ref(null);
 const selectors = {
     videos: videos,
     microphones: microphones,
     // speakers: speakers,
+    menu: menu,
 };
 const buttons_record = ref(null);
 const buttons_pause = ref(null);
 const buttons_stop = ref(null);
 const buttons_play = ref(null);
 const button_download = ref(null);
+const button_menu= ref(null);
 
 // parts layout variables
 let windowSizeW = ref(window.innerWidth);
@@ -142,6 +284,19 @@ const selectorsStyle = {
         visibility: 'hidden',
         set visible(flag){ this.visibility = flag? 'visible' : 'hidden'; },
         get visible(){ return this.visibility == 'visible'; },
+    }),
+    menu: reactive({
+        _top: 0,
+        get top(){ return isNumber(this._top)? this._top+ 'px' : '';},
+        _left: 0,
+        get left(){ return isNumber(this._left)? this._left+ 'px' : '';},
+        // _width: 0,
+        // get width(){ return isNumber(this._width)? this._width+ 'px' : '';},
+        _height: 0,
+        get height(){ return isNumber(this._height)? this._height+ 'px' : '';},
+        visibility: 'hidden',
+        set visible(flag){ this.visibility = flag? 'visible' : 'hidden'; },
+        get visible(){ return this.visibility == 'visible'; },
     })
 }
 const selectedVideo = ref('none');
@@ -153,6 +308,10 @@ const microphoneSelections = reactive({});
 const speakerSelections = reactive({});
 
 watch(selectedVideo, (newSelection) => {
+    if(bgSegmenter){
+        bgSegmenter.close();
+        bgSegmenter = null;
+    }
     if(newSelection == 'none'){
         previewSizeW.value = captureSizeW;
 
@@ -172,6 +331,18 @@ watch(selectedVideo, (newSelection) => {
         previewSizeW.value = captureSizeW + videoSizeW;
 
         ws4screen.setSelfWriter(false);
+
+        const bgProcessor = background.getProcessor();
+        if(bgProcessor){
+            bgSegmenter = new SelfieSegmentation({locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`;
+            }});
+            bgSegmenter.setOptions({
+                //   modelSelection: 0, // general model
+                modelSelection: 1, // landscape model
+            });
+            bgSegmenter.onResults(bgProcessor);
+        }
 
         navigator.mediaDevices.getUserMedia({
             audio: false,
@@ -198,27 +369,41 @@ watch(selectedVideo, (newSelection) => {
                 start() {
                     console.log('writable stream for video started');
                 },
-                async write(videoFrame){
-                    if(lastScreenFrame){
-                        canvasContext.drawImage(lastScreenFrame, 0, 0, captureSizeW, captureSizeH);
-                        lastScreenFrame.close();
-                        lastScreenFrame = null;
+                write(videoFrame){
+                    if(bgSegmenter){
+                        createImageBitmap(videoFrame).then((bitmap) => {
+                            bgSegmenter.send({image: bitmap}).then(()=>{
+                                videoFrame.close();
+                                bitmap.close()
+                            });
+                        });
+                    }else{
+                        if(lastScreenFrame){
+                            canvasContext.drawImage(lastScreenFrame, 0, 0, captureSizeW, captureSizeH);
+                            lastScreenFrame.close();
+                            lastScreenFrame = null;
+                        }
+
+                        canvasContext.save();
+                        //canvasContext.clearRect(captureSizeW, 0, videoSizeW, videoSizeH);
+
+                        // canvasContext.scale(-1, 1);
+                        // canvasContext.drawImage(videoFrame, -previewSizeW.value, 0, videoSizeW, videoSizeH);
+                        canvasContext.drawImage(videoFrame, captureSizeW, 0, videoSizeW, videoSizeH);
+
+                        canvasContext.restore();
+                        videoFrame.close();
                     }
-
-                    canvasContext.save();
-                    //canvasContext.clearRect(captureSizeW, 0, videoSizeW, videoSizeH);
-
-                    canvasContext.scale(-1, 1);
-                    canvasContext.drawImage(videoFrame, -previewSizeW.value, 0, videoSizeW, videoSizeH);
-
-                    canvasContext.restore();
-                    videoFrame.close();
                 },
                 close(){
                     console.log('writable stream for video was closed');
                     if(tracks.video != null){
                         tracks.video.forEach((track) => track.stop());
                         tracks.video = null;
+                    }
+                    if(bgSegmenter){
+                        bgSegmenter.close();
+                        bgSegmenter = null;
                     }
                     ws4screen.setSelfWriter(true);
                 },
@@ -384,7 +569,7 @@ function onSelectorClick(button, target){
         style._left = 0;
     else
         style._left = left;
-    style._width = br_selector.width;
+    // style._width = br_selector.width;
     Object.keys(selectorsStyle).forEach((selector) => {
         selectorsStyle[selector].visible = (selector == target && !selectorsStyle[selector].visible )
     });
@@ -593,6 +778,11 @@ function onDownloadButtonClick(event){
         event.target.download = filename_title + "." + (new Date()).toISOString() + "." + filename_ext; 
     }
 }
+
+function onBackgroundImageFileSelected(event){
+    createImageBitmap(event.target.files[0]).then((img) => virtualBGImage.value = img);
+    background.setVirtual();
+}
 </script>
 
 <template>
@@ -607,10 +797,10 @@ function onDownloadButtonClick(event){
         <button type="button" name="video"      :disabled="nowRecording | nowPlaying" class="disabled:opacity-25 px-2"  @click="onSelectorClick($event.target, 'videos')">&#x1F3A5;&#xFE0E;</button>
         <button type="button" name="microphone" :disabled="nowRecording | nowPlaying" class="disabled:opacity-25 px-2"  @click="onSelectorClick($event.target, 'microphones')">&#x1F3A4;&#xFE0E;</button>
         <button type="button" name="speaker"    :disabled="nowRecording" class="disabled:opacity-25 px-2 rotate-180 hidden" @click="onSelectorClick($event.target, 'speakers')">&#x1F56A;&#xFE0E;</button>
-        <a ref="button_download" class="px-2"  :class="{ 'opacity-25': !nowPlayable }" @click="onDownloadButtonClick">&#x1F4E5;&#xFE0E;</a>
-        <button type="button" id="menu" class="disabled:opacity-25 text-white px-2">☰</button>
+        <a ref="button_download" class="px-2 cursor-pointer"  :class="{ 'opacity-25': !nowPlayable }" @click="onDownloadButtonClick">&#x1F4E5;&#xFE0E;</a>
+        <button type="button" id="menu" class="disabled:opacity-25 text-white px-2" @click="onSelectorClick($event.target, 'menu')">☰</button>
     </span>
-    <button type="button" ref="buttons_record" :disabled="!(nowRecordable & !nowRecording & !nowPlaying)"  class="disabled:opacity-25 pb-2 px-2" @click="onRecordButtonClick">◉</button>
+    <button type="button" ref="buttons_record" :disabled="!(nowRecordable & !nowRecording & !nowPlaying)"  class="disabled:opacity-25 py-1 px-2" @click="onRecordButtonClick">◉</button>
     <button type="button" ref="buttons_pause"  :disabled="!(nowRecording | nowPlaying)" class="disabled:opacity-25 pb-2 px-1 rotate-90 emphasis" @click="onPauseButtonClick">〓</button>
     <button type="button" ref="buttons_stop"   :disabled="!(nowRecording | nowPlaying)" class="disabled:opacity-25 pb-2 px-2" @click="onStopButtonClick">◼</button>
     <button type="button" ref="buttons_play"   :disabled="!(nowPlayable)"  class="disabled:opacity-25 pb-2 px-2" @click="onPlayButtonClick">▶</button>
@@ -649,6 +839,41 @@ function onDownloadButtonClick(event){
             <option v-for="(value, key) in speakerSelections" :value="key" class="bg-blue-400 checked:bg-blue-50">{{ value }}</option>
         </optgroup>
     </select>
+    <div ref="menu"
+         id="menu"
+         class="absolute w-fit text-2xl"
+         :style="selectorsStyle.menu"
+         
+    >
+        <div class="rounded-t-xl bg-blue-900 text-white">
+            <p class="px-4 py-1">背景</p> 
+            <div class="pl-10 pr-5 py-2 bg-blue-400 checked:bg-blue-50">
+                <label class="block my-1">
+                    <input type="radio" value="normal"  v-model="background.state" />
+                    そのまま
+                </label>
+                <label class="block my-1">
+                    <input type="radio" value="virtual" v-model="background.state" />
+                    仮想背景
+                    <label class="px-3 py-1 bg-blue-900 ">
+                        <input type="file" class="hidden" accept="image/gif, image/jpeg, image/png" @change="onBackgroundImageFileSelected"/>
+                        <span :class="{hidden: virtualBGImage == null}">&#x1F5F9;&#xFE0E;</span>
+                        <span :class="{hidden: virtualBGImage != null}">&#x1F4C4;&#xFE0E;</span>
+                        背景画像を選択
+                    </label>
+                </label>
+                <label class="block my-1">
+                    <input type="radio" value="blur"    v-model="background.state" />
+                    ぼかし
+                </label>
+                <label class="block my-1">
+                    <input type="radio" value="blank"   v-model="background.state" />
+                    背景抜き
+                </label>
+            </div>
+            
+        </div>
+    </div>
     <div  class="absolute w-full top-1/2 -translate-y-1/2 text-center text-red-700 font-bold text-4xl bg-white py-10" :style="{display: mediaDenied? 'block':'none'}">
         カメラとマイクへのアクセスが拒否されました。<br/>
         利用するには、ブラウザの設定から<br/>

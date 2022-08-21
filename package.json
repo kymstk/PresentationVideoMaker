@@ -5,10 +5,9 @@
   "scripts": {
     "dev": "vite --host --port 8080",
     "build": "vite build",
-    "preview": "vite preview --host --port 8080"
+    "preview": "vite preview --host --port 8000"
   },
   "dependencies": {
-    "@mediapipe/selfie_segmentation": "^0.1.1632777926",
     "vue": "^3.2.25"
   },
   "devDependencies": {
