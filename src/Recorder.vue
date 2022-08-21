@@ -246,24 +246,6 @@ function _loadMicrophone(){
         },
     }).then((micMedia) => {
         tracks.microphone = micMedia.getTracks()
-        /*
-        tracks.microphone.forEach((track) => {
-            const capabilities = track.getCapabilities();
-            const settings = track.getSettings();
-            const applies = {};
-            ['autoGainControl', 'noiseSuppression'].forEach((prop) => {
-                if(!(prop in capabilities))
-                    return;
-                if(prop in settings && settings[prop])
-                    return;
-
-                applies[prop] = true;
-            });
-            if(Object.keys(applies).length){
-                track.applyConstraints(applies);
-            }
-        })
-        */
     });
 }
 watch(selectedMIC, _loadMicrophone);
