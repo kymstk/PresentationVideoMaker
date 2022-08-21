@@ -541,6 +541,11 @@ function onRecordButtonClick(event){
         if(tracks.canvas != null){
             tracks.canvas = null;
         }
+        if(tracks.microphone.constructor.name == 'Array'){
+            console.log('on recorder stop, stop microphone capture');
+            tracks.microphone.forEach((track) => track.stop())
+            tracks.microphone = null;
+        }
 
         recording.objectURL = URL.createObjectURL(new Blob(recording.blob, { type: mimeType }));
         buttons_pause.value.style.animationName = '';
