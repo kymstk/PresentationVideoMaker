@@ -41,8 +41,9 @@ const recording = shallowReactive({
     blob: null,
     objectURL: null,
 })
-// 仮想背景
 
+// 仮想背景
+let bokeh = ref(3);
 let virtualBGImage = ref(null);
 let bgSegmenter = null;
 const segmenterOnResults = {
@@ -71,7 +72,7 @@ const segmenterOnResults = {
         canvasContext.clearRect(captureSizeW, 0, videoSizeW, videoSizeH);
         canvasContext.drawImage(results.segmentationMask, captureSizeW, 0, videoSizeW, videoSizeH)
         
-        const thre = 128;
+        const thre = 100;
         var id = canvasContext.getImageData(captureSizeW, 0, videoSizeW, videoSizeH)
         for(let i = 3; i < id.data.length; i += 4){
             id.data[i] = (id.data[i] > thre)? 255:0
@@ -96,13 +97,42 @@ const segmenterOnResults = {
             }
         }
     },
-    blurBG(){
+    blurBG(results){
+        canvasContext.save()
+        canvasContext.clearRect(captureSizeW, 0, videoSizeW, videoSizeH);
+        canvasContext.drawImage(results.segmentationMask, captureSizeW, 0, videoSizeW, videoSizeH)
+        
+        const thre = 100;
+        var id = canvasContext.getImageData(captureSizeW, 0, videoSizeW, videoSizeH)
+        for(let i = 3; i < id.data.length; i += 4){
+            id.data[i] = (id.data[i] > thre)? 255:0
+        }
+        canvasContext.putImageData(id, captureSizeW, 0)
+        
+        canvasContext.globalCompositeOperation = "source-in"
+        canvasContext.drawImage(results.image, captureSizeW, 0, videoSizeW, videoSizeH)
+        
+        canvasContext.globalCompositeOperation = "destination-atop"
+        canvasContext.filter = `blur(${bokeh.value}px)`;
+        canvasContext.drawImage(results.image, captureSizeW, 0, videoSizeW, videoSizeH)
 
+        results.segmentationMask.close();
+        results.image.close();
+
+        canvasContext.restore()
+
+        if(lastScreenFrame){
+            try{
+                canvasContext.drawImage(lastScreenFrame, 0, 0, captureSizeW, captureSizeH);
+            }catch(e){
+                console.debug(e)
+            }
+        }
     },
 }
 
 const background = reactive({
-    state: 'blank',
+    state: 'normal',
     states: {normal:'そのまま', virtual:'仮想背景', blur:'ぼかし', blank:'背景抜き', },
     get isNormal(){
         return this.state == 'normal';
@@ -315,8 +345,6 @@ watch(selectedVideo, (newSelection) => {
     if(newSelection == 'none'){
         previewSizeW.value = captureSizeW;
 
-        ws4screen.setSelfWriter(true);
-
         if(tracks.video != null){
             tracks.video.forEach((track) => track.stop());
             tracks.video = null;
@@ -329,8 +357,6 @@ watch(selectedVideo, (newSelection) => {
     }
     else{
         previewSizeW.value = captureSizeW + videoSizeW;
-
-        ws4screen.setSelfWriter(false);
 
         const bgProcessor = background.getProcessor();
         if(bgProcessor){
@@ -380,8 +406,6 @@ watch(selectedVideo, (newSelection) => {
                     }else{
                         if(lastScreenFrame){
                             canvasContext.drawImage(lastScreenFrame, 0, 0, captureSizeW, captureSizeH);
-                            lastScreenFrame.close();
-                            lastScreenFrame = null;
                         }
 
                         canvasContext.save();
@@ -405,7 +429,8 @@ watch(selectedVideo, (newSelection) => {
                         bgSegmenter.close();
                         bgSegmenter = null;
                     }
-                    ws4screen.setSelfWriter(true);
+                    if(lastScreenFrame)
+                        canvasContext.drawImage(lastScreenFrame, 0, 0, captureSizeW, captureSizeH);
                 },
                 abort(err){
                     console.log('writable stream for video was aborted:', err);
@@ -580,39 +605,6 @@ function closeSelectors(){
     });
 }
 
-const ws4screen = {
-    start() {
-        console.log('writable stream for screen started');
-    },
-    _save(screenFrame){
-        if(lastScreenFrame)
-            lastScreenFrame.close();
-        lastScreenFrame = screenFrame;
-    },
-    _write(screenFrame){
-        if(lastScreenFrame)
-            lastScreenFrame.close();
-        canvasContext.drawImage(screenFrame, 0, 0, captureSizeW, captureSizeH);
-        lastScreenFrame = screenFrame;
-    },
-    setSelfWriter(f){
-        if(f)
-            this.write = this._write;
-        else
-            this.write = this._save;
-    },
-    close(){
-        if(lastScreenFrame)
-            lastScreenFrame.close();
-        canvasContext.clearRect(0, 0, captureSizeW, captureSizeH);
-        console.log('writable stream for screen was closed');
-    },
-    abort(err){
-        console.log('writable stream for screen was aborted:', err);
-    },
-};
-ws4screen.setSelfWriter(true);
-
 function onScreenButtonClick(){
     closeSelectors();
     navigator.mediaDevices.getDisplayMedia({
@@ -647,7 +639,29 @@ function onScreenButtonClick(){
         }
         screenTrackProcessor = new MediaStreamTrackProcessor({ track: video });
 
-        screenTrackProcessor.readable.pipeTo(new WritableStream(ws4screen));
+        screenTrackProcessor.readable.pipeTo(new WritableStream({
+            start() {
+                console.log('writable stream for screen started');
+            },
+            write(screenFrame){
+                if(lastScreenFrame)
+                    lastScreenFrame.close();
+                if( !videoTrackProcessor )
+                    canvasContext.drawImage(screenFrame, 0, 0, captureSizeW, captureSizeH);
+                lastScreenFrame = screenFrame;
+            },
+            close(){
+                if(lastScreenFrame){
+                    lastScreenFrame.close();
+                    lastScreenFrame = null;
+                }
+                canvasContext.clearRect(0, 0, captureSizeW, captureSizeH);
+                console.log('writable stream for screen was closed');
+            },
+            abort(err){
+                console.log('writable stream for screen was aborted:', err);
+            },
+        }));
     })
 }
 
@@ -855,7 +869,7 @@ function onBackgroundImageFileSelected(event){
                 <label class="block my-1">
                     <input type="radio" value="virtual" v-model="background.state" />
                     仮想背景
-                    <label class="px-3 py-1 bg-blue-900 ">
+                    <label class="px-3 my-1 bg-blue-900 ">
                         <input type="file" class="hidden" accept="image/gif, image/jpeg, image/png" @change="onBackgroundImageFileSelected"/>
                         <span :class="{hidden: virtualBGImage == null}">&#x1F5F9;&#xFE0E;</span>
                         <span :class="{hidden: virtualBGImage != null}">&#x1F4C4;&#xFE0E;</span>
@@ -865,6 +879,10 @@ function onBackgroundImageFileSelected(event){
                 <label class="block my-1">
                     <input type="radio" value="blur"    v-model="background.state" />
                     ぼかし
+                    <label class="ml-10 px-3 my-1 bg-blue-900 ">
+                        度合
+                        <input type="range" min="3" max="10" step="1" v-model="bokeh"/>
+                    </label>
                 </label>
                 <label class="block my-1">
                     <input type="radio" value="blank"   v-model="background.state" />
