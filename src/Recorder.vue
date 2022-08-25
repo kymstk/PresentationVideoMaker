@@ -124,8 +124,10 @@ const background = {
         }
     },
     virtBG(results){
-        canvasContext.save()
-        canvasContext.clearRect(captureSizeW, 0, videoSizeW, videoSizeH);
+        canvasContext.globalCompositeOperation = "copy"
+        canvasContext.drawImage(virtualBGImage.value, captureSizeW, 0, videoSizeW, videoSizeH)
+
+        canvasContext.globalCompositeOperation = "destination-out"
         canvasContext.drawImage(results.segmentationMask, captureSizeW, 0, videoSizeW, videoSizeH)
         
         const thre = 100;
@@ -135,16 +137,13 @@ const background = {
         }
         canvasContext.putImageData(id, captureSizeW, 0)
         
-        canvasContext.globalCompositeOperation = "source-in"
+        canvasContext.globalCompositeOperation = "destination-over"
         canvasContext.drawImage(results.image, captureSizeW, 0, videoSizeW, videoSizeH)
+
         results.segmentationMask.close();
         results.image.close();
         
-        canvasContext.globalCompositeOperation = "destination-atop"
-        canvasContext.drawImage(virtualBGImage.value, captureSizeW, 0, videoSizeW, videoSizeH)
-
-        canvasContext.restore()
-
+        canvasContext.globalCompositeOperation = "source-copy"
         if(lastScreenFrame){
             try{
                 canvasContext.drawImage(lastScreenFrame, 0, 0, captureSizeW, captureSizeH);
@@ -154,8 +153,12 @@ const background = {
         }
     },
     blurBG(results){
-        canvasContext.save()
-        canvasContext.clearRect(captureSizeW, 0, videoSizeW, videoSizeH);
+        canvasContext.globalCompositeOperation = "copy"
+        canvasContext.filter = `blur(${bokeh.value}px)`;
+        canvasContext.drawImage(results.image, captureSizeW, 0, videoSizeW, videoSizeH)
+
+        canvasContext.globalCompositeOperation = "destination-out"
+        canvasContext.filter = 'none';
         canvasContext.drawImage(results.segmentationMask, captureSizeW, 0, videoSizeW, videoSizeH)
         
         const thre = 100;
@@ -165,18 +168,13 @@ const background = {
         }
         canvasContext.putImageData(id, captureSizeW, 0)
         
-        canvasContext.globalCompositeOperation = "source-in"
-        canvasContext.drawImage(results.image, captureSizeW, 0, videoSizeW, videoSizeH)
-        
-        canvasContext.globalCompositeOperation = "destination-atop"
-        canvasContext.filter = `blur(${bokeh.value}px)`;
+        canvasContext.globalCompositeOperation = "destination-over"
         canvasContext.drawImage(results.image, captureSizeW, 0, videoSizeW, videoSizeH)
 
         results.segmentationMask.close();
         results.image.close();
 
-        canvasContext.restore()
-
+        canvasContext.globalCompositeOperation = "source-copy"
         if(lastScreenFrame){
             try{
                 canvasContext.drawImage(lastScreenFrame, 0, 0, captureSizeW, captureSizeH);
@@ -652,8 +650,10 @@ function onScreenButtonClick(){
             write(screenFrame){
                 if(lastScreenFrame)
                     lastScreenFrame.close();
-                if( !videoTrackProcessor )
+                if( !videoTrackProcessor ){
+                    canvasContext.globalCompositeOperation = "copy"
                     canvasContext.drawImage(screenFrame, 0, 0, captureSizeW, captureSizeH);
+                }
                 lastScreenFrame = screenFrame;
             },
             close(){
