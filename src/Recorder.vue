@@ -398,7 +398,7 @@ watch(selectedVideo, (newSelection) => {
                 write(videoFrame){
                     if(bgSegmenter){
                         createImageBitmap(videoFrame).then((bitmap) => {
-                            bgSegmenter.send({image: bitmap}).then(()=>{
+                                bgSegmenter.send({image: bitmap}).finally(()=>{
                                 videoFrame.close();
                                 bitmap.close()
                             });
