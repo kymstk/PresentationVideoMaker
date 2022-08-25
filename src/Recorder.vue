@@ -71,7 +71,7 @@ const recording = shallowReactive({
 })
 
 // 仮想背景
-let bokeh = ref(3);
+let bokeh = ref(10);
 let virtualBGImage = ref(null);
 let bgSegmenter = null;
 const segmenterOnResults = {
