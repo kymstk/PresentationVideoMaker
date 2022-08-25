@@ -446,26 +446,6 @@ watch(selectedVideo, (newSelection) => {
     }
 })
 
-function _loadMicrophone(){
-    console.log('selected microphone:');
-
-    if(tracks.microphone != null){
-        tracks.microphone.forEach((track) => track.stop());
-        tracks.microphone = null;
-    }
-    navigator.mediaDevices.getUserMedia({
-        video: false,
-        audio: {
-            deviceId: selectedMIC.value,
-            echoCancellation: false,
-            noiseSuppression: true,
-        },
-    }).then((micMedia) => {
-        tracks.microphone = micMedia.getTracks()
-    });
-}
-watch(selectedMIC, _loadMicrophone);
-
 function updatePartsSize([prevSizeW, prevSizeH]){
     const winSizeW = windowSizeW.value;
     const winSizeH = windowSizeH.value; 
@@ -700,7 +680,7 @@ function onPauseButtonClick(event){
     }
 }
 
-function onRecordButtonClick(event){
+async function onRecordButtonClick(event){
     if(recording.blob == null){
         // nop
     }else if(recording.blob.constructor.name == 'Array' &&  recording.blob.length > 0){
@@ -719,11 +699,20 @@ function onRecordButtonClick(event){
         if(selectedMIC.value == null){
             alert('使用するマイクを選択してください')
             return false;
-        } else
-            _loadMicrophone();
-    }else{
-        tracks.microphone.forEach((track) => recordingTracks.push(track));
     }
+    }
+    const micMedia = await navigator.mediaDevices.getUserMedia({
+        video: false,
+        audio: {
+            deviceId: selectedMIC.value,
+            echoCancellation: false,
+            noiseSuppression: true,
+        },
+    });
+    tracks.microphone = micMedia.getAudioTracks();
+    tracks.microphone.forEach(track => recordingTracks.push(track))
+    console.log('add mic');
+    //tracks.microphone.forEach((track) => recordingTracks.push(track));
     
     const canvasMedia = previewCanvas.value.captureStream(frameRate.max);
     tracks.canvas = canvasMedia.getTracks();
