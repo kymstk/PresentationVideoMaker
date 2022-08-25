@@ -374,6 +374,7 @@ watch(selectedVideo, (newSelection) => {
                 width: videoSizeW,
                 height: videoSizeH,
                 deviceId: newSelection,
+                frameRate: frameRate.max,
             }
         }).then((video) => {
             console.log(video);
@@ -720,7 +721,7 @@ function onRecordButtonClick(event){
         tracks.microphone.forEach((track) => recordingTracks.push(track));
     }
     
-    const canvasMedia = previewCanvas.value.captureStream();
+    const canvasMedia = previewCanvas.value.captureStream(frameRate.max);
     tracks.canvas = canvasMedia.getTracks();
 
     tracks.canvas.forEach((track) => recordingTracks.push(track));
