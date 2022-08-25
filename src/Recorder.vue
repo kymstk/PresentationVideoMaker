@@ -538,12 +538,11 @@ watch(microphoneSelections, () => {
 
 (async function setupSelections(){
     try{ 
+        // カメラ/マイクの使用許可を取得するための空打ち
+        // (許可がないと enumrateDevices() の結果で label が取得できない)
         const media = await navigator.mediaDevices.getUserMedia({video:true, audio:true});
-    }catch(err){
-        // console.log({ error:err })
-        if(err.name == 'NotAllowedError')
-            mediaDenied.value = true;
-    }
+        media.getTracks().forEach((track) => track.stop());
+
     // デバイスリストを取得して、そのうちカメラデバイスのみを選択リストに追加
     const devices = await navigator.mediaDevices.enumerateDevices();
     devices.forEach((device) => {
@@ -563,6 +562,11 @@ watch(microphoneSelections, () => {
                 selectedSPK.value = 'default'
         }
     });
+    }catch(err){
+        // console.log({ error:err })
+        if(err.name == 'NotAllowedError')
+            mediaDenied.value = true;
+    }
 })();
 
 function onWindowResize(){
