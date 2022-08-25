@@ -23,6 +23,34 @@ const hostname = window.location.origin;
 
 const mediaDenied = ref(false);
 
+// states
+const nowRecordable = computed(() => ( tracks.screen != null ))
+const nowRecording = computed(() => (recording.recorder != null && recording.recorder.state != 'inactive'));
+const nowPlayable = computed(() => (recording.blob != null && !nowRecording.value));
+const nowPlaying = ref(false);
+
+// variables for 'ref' binding
+const previewCanvas = ref(null);
+const replayVideo = ref(null);
+const control = ref(null);
+
+const videos = ref(null);
+const microphones = ref(null);
+const speakers = ref(null);
+const menu = ref(null);
+const selectors = {
+    videos: videos,
+    microphones: microphones,
+    // speakers: speakers,
+    menu: menu,
+};
+const buttons_record = ref(null);
+const buttons_pause = ref(null);
+const buttons_stop = ref(null);
+const buttons_play = ref(null);
+const button_download = ref(null);
+const button_bgImage = ref(null);
+
 // 録画関係
 const tracks = shallowReactive({
     screen: null,
@@ -211,34 +239,6 @@ watch(virtualBGImage, (newstate, oldstate) => {
 
     bgSegmenter.onResults(background.getProcessor());
 });
-
-// states
-const nowRecordable = computed(() => ( tracks.screen != null ))
-const nowRecording = computed(() => (recording.recorder != null && recording.recorder.state != 'inactive'));
-const nowPlayable = computed(() => (recording.blob != null && !nowRecording.value));
-const nowPlaying = ref(false);
-
-// variables for 'ref' binding
-const previewCanvas = ref(null);
-const replayVideo = ref(null);
-const control = ref(null);
-
-const videos = ref(null);
-const microphones = ref(null);
-const speakers = ref(null);
-const menu = ref(null);
-const selectors = {
-    videos: videos,
-    microphones: microphones,
-    // speakers: speakers,
-    menu: menu,
-};
-const buttons_record = ref(null);
-const buttons_pause = ref(null);
-const buttons_stop = ref(null);
-const buttons_play = ref(null);
-const button_download = ref(null);
-const button_menu= ref(null);
 
 // parts layout variables
 let windowSizeW = ref(window.innerWidth);
