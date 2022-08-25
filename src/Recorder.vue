@@ -52,6 +52,7 @@ const button_download = ref(null);
 const button_bgImage = ref(null);
 
 // 録画関係
+const frameRate = {max: 24, min: 10};
 const tracks = shallowReactive({
     screen: null,
     video: null,
@@ -74,7 +75,34 @@ const recording = shallowReactive({
 let bokeh = ref(10);
 let virtualBGImage = ref(null);
 let bgSegmenter = null;
-const segmenterOnResults = {
+let bgSegmenterReady = true;
+
+const background = {
+    state: ref('normal'),
+    get isNormal(){
+        return this.state.value == 'normal';
+    },
+    setNormal(){
+        this.state.value = 'normal';
+    },
+    get isVirtual(){
+        return this.state.value == 'virtual';
+    },
+    setVirtual(){
+        this.state.value = 'virtual';
+    },
+    get isBlur(){
+        return this.state.value == 'blur';
+    },
+    setBlur(){
+        this.state.value = 'blur';
+    },
+    get isBlank(){
+        return this.state.value == 'blank';
+    },
+    setBlank(){
+        this.state.value = 'blank';
+    },
     blankBG(results){
         canvasContext.save()
         canvasContext.clearRect(captureSizeW, 0, videoSizeW, videoSizeH);
@@ -157,59 +185,26 @@ const segmenterOnResults = {
             }
         }
     },
-}
-
-const background = reactive({
-    state: 'normal',
-    states: {normal:'そのまま', virtual:'仮想背景', blur:'ぼかし', blank:'背景抜き', },
-    get isNormal(){
-        return this.state == 'normal';
-    },
-    setNormal(){
-        this.state = 'normal';
-    },
-    get isVirtual(){
-        return this.state == 'virtual';
-    },
-    setVirtual(){
-        this.state = 'virtual';
-    },
-    get isBlur(){
-        return this.state == 'blur';
-    },
-    setBlur(){
-        this.state = 'blur';
-    },
-    get isBlank(){
-        return this.state == 'blank';
-    },
-    setBlank(){
-        this.state = 'blank';
-    },
     getProcessor(){
-        switch(this.state){
+        switch(this.state.value){
             case 'virtual':
                 if(virtualBGImage.value)
-                    return segmenterOnResults.virtBG;
+                    return this.virtBG;
                 else
-                    return segmenterOnResults.blankBG;
+                    return this.blankBG;
                 break;
             case 'blur':
-                return segmenterOnResults.blurBG;
+                return this.blurBG;
                 break;
             case 'blank':
-                return segmenterOnResults.blankBG;
+                return this.blankBG;
                 break;
             default:
                 return null;
         }
-    }
-})
-watch(background, (newstate, oldstate) => {
-    if(videoTrackProcessor == null)
-        return;
-    
-    const bgProcessor = background.getProcessor();
+    },
+    setupBgSegmenter(){
+        const bgProcessor = this.getProcessor();
     if(bgProcessor){
         if(bgSegmenter == null){
             bgSegmenter = new SelfieSegmentation({locateFile: (file) => {
@@ -219,13 +214,31 @@ watch(background, (newstate, oldstate) => {
                 //   modelSelection: 0, // general model
                 modelSelection: 1, // landscape model
             });
+                if(tracks.video)
+                    tracks.video.forEach(track => track.applyConstraints({frameRate: frameRate.min}));
         }
+            else
+                bgSegmenter.reset()
 
         bgSegmenter.onResults(bgProcessor);
-    }else if(bgSegmenter){
+            bgSegmenterReady = true;
+        }else{
+            this.closeBgSegmenter();
+        }
+    },
+    closeBgSegmenter(){
+        if(bgSegmenter){
         bgSegmenter.close();
         bgSegmenter = null;
     }
+        if(tracks.video)
+            tracks.video.forEach(track => track.applyConstraints({frameRate: frameRate.max})); // reset fps
+    }
+};
+const background_state = background.state; // v-model はオブジェクトのプロパティな ref() に反応しないので…
+watch(background.state, (newstate, oldstate) => {
+    if(videoTrackProcessor != null)
+        background.setupBgSegmenter();
 });
 watch(virtualBGImage, (newstate, oldstate) => {
     if(videoTrackProcessor == null)
@@ -338,10 +351,6 @@ const microphoneSelections = reactive({});
 const speakerSelections = reactive({});
 
 watch(selectedVideo, (newSelection) => {
-    if(bgSegmenter){
-        bgSegmenter.close();
-        bgSegmenter = null;
-    }
     if(newSelection == 'none'){
         previewSizeW.value = captureSizeW;
 
@@ -354,21 +363,12 @@ watch(selectedVideo, (newSelection) => {
             videoTrackProcessor = null;
         }
         tracks.video = null;
+        background.closeBgSegmenter();
     }
     else{
         previewSizeW.value = captureSizeW + videoSizeW;
 
-        const bgProcessor = background.getProcessor();
-        if(bgProcessor){
-            bgSegmenter = new SelfieSegmentation({locateFile: (file) => {
-                return `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`;
-            }});
-            bgSegmenter.setOptions({
-                //   modelSelection: 0, // general model
-                modelSelection: 1, // landscape model
-            });
-            bgSegmenter.onResults(bgProcessor);
-        }
+        background.setupBgSegmenter();
 
         navigator.mediaDevices.getUserMedia({
             audio: false,
@@ -397,12 +397,18 @@ watch(selectedVideo, (newSelection) => {
                 },
                 write(videoFrame){
                     if(bgSegmenter){
+                        if(bgSegmenterReady){
+                            bgSegmenterReady = false;
                         createImageBitmap(videoFrame).then((bitmap) => {
                                 bgSegmenter.send({image: bitmap}).finally(()=>{
                                 videoFrame.close();
                                 bitmap.close()
+                                    bgSegmenterReady = true;
                             });
                         });
+                    }else{
+                            videoFrame.close();
+                        }
                     }else{
                         if(lastScreenFrame){
                             canvasContext.drawImage(lastScreenFrame, 0, 0, captureSizeW, captureSizeH);
@@ -863,11 +869,11 @@ function onBackgroundImageFileSelected(event){
             <p class="px-4 py-1">背景</p> 
             <div class="pl-10 pr-5 py-2 bg-blue-400 checked:bg-blue-50">
                 <label class="block my-1">
-                    <input type="radio" value="normal"  v-model="background.state" />
+                    <input type="radio" value="normal"  v-model="background_state" />
                     そのまま
                 </label>
                 <label class="block my-1">
-                    <input type="radio" value="virtual" v-model="background.state" />
+                    <input type="radio" value="virtual" v-model="background_state" />
                     仮想背景
                     <label class="px-3 my-1 bg-blue-900 ">
                         <input type="file" class="hidden" accept="image/gif, image/jpeg, image/png" @change="onBackgroundImageFileSelected"/>
@@ -877,7 +883,7 @@ function onBackgroundImageFileSelected(event){
                     </label>
                 </label>
                 <label class="block my-1">
-                    <input type="radio" value="blur"    v-model="background.state" />
+                    <input type="radio" value="blur"    v-model="background_state" />
                     ぼかし
                     <label class="ml-10 px-3 my-1 bg-blue-900 ">
                         度合
@@ -885,7 +891,7 @@ function onBackgroundImageFileSelected(event){
                     </label>
                 </label>
                 <label class="block my-1">
-                    <input type="radio" value="blank"   v-model="background.state" />
+                    <input type="radio" value="blank"   v-model="background_state" />
                     背景抜き
                 </label>
             </div>
