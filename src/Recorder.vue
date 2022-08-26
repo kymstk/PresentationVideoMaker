@@ -417,14 +417,6 @@ watch(selectedVideo, (newSelection) => {
                             canvasContext.drawImage(lastScreenFrame, 0, 0, captureSizeW, captureSizeH);
                         }
 
-                        canvasContext.save();
-                        //canvasContext.clearRect(captureSizeW, 0, videoSizeW, videoSizeH);
-
-                        // canvasContext.scale(-1, 1);
-                        // canvasContext.drawImage(videoFrame, -previewSizeW.value, 0, videoSizeW, videoSizeH);
-                        canvasContext.drawImage(videoFrame, captureSizeW, 0, videoSizeW, videoSizeH);
-
-                        canvasContext.restore();
                         videoFrame.close();
                     }
                 },
