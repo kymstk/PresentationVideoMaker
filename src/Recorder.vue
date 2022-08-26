@@ -143,7 +143,7 @@ const background = {
         results.segmentationMask.close();
         results.image.close();
         
-        canvasContext.globalCompositeOperation = "source-copy"
+        canvasContext.globalCompositeOperation = "source-over"
         if(lastScreenFrame){
             try{
                 canvasContext.drawImage(lastScreenFrame, 0, 0, captureSizeW, captureSizeH);
@@ -174,7 +174,7 @@ const background = {
         results.segmentationMask.close();
         results.image.close();
 
-        canvasContext.globalCompositeOperation = "source-copy"
+        canvasContext.globalCompositeOperation = "source-over"
         if(lastScreenFrame){
             try{
                 canvasContext.drawImage(lastScreenFrame, 0, 0, captureSizeW, captureSizeH);
@@ -409,7 +409,11 @@ watch(selectedVideo, (newSelection) => {
                             videoFrame.close();
                         }
                     }else{
+                        canvasContext.globalCompositeOperation = "copy"
+                        canvasContext.drawImage(videoFrame, captureSizeW, 0, videoSizeW, videoSizeH);
+
                         if(lastScreenFrame){
+                            canvasContext.globalCompositeOperation = "source-over"
                             canvasContext.drawImage(lastScreenFrame, 0, 0, captureSizeW, captureSizeH);
                         }
 
