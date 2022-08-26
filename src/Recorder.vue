@@ -213,11 +213,14 @@ const background = {
                 modelSelection: 1, // landscape model
             });
                 if(tracks.video)
-                    tracks.video.forEach(track => track.applyConstraints({frameRate: frameRate.min}));
+                        tracks.video.forEach(track => track.applyConstraints({
+                            frameRate: frameRate.min,
+                            width: videoSizeW,
+                            height: videoSizeH,
+                        }));
         }
-            else
-                bgSegmenter.reset()
 
+            bgSegmenter.reset();
         bgSegmenter.onResults(bgProcessor);
             bgSegmenterReady = true;
         }else{
@@ -229,8 +232,13 @@ const background = {
         bgSegmenter.close();
         bgSegmenter = null;
     }
-        if(tracks.video)
-            tracks.video.forEach(track => track.applyConstraints({frameRate: frameRate.max})); // reset fps
+        if(tracks.video){
+            tracks.video.forEach(track => track.applyConstraints({ // reset fps
+                frameRate: frameRate.max,
+                width: videoSizeW,
+                height: videoSizeH,
+            }));
+        }
     }
 };
 const background_state = background.state; // v-model はオブジェクトのプロパティな ref() に反応しないので…
