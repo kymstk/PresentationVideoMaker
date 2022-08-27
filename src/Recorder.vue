@@ -104,38 +104,26 @@ const background = {
         this.state.value = 'blank';
     },
     blankBG(results){
-        canvasContext.save()
-        canvasContext.clearRect(captureSizeW, 0, videoSizeW, videoSizeH);
+        canvasContext.globalCompositeOperation = "copy"
+        canvasContext.filter = 'blur(4px)';
         canvasContext.drawImage(results.segmentationMask, captureSizeW, 0, videoSizeW, videoSizeH)
+        canvasContext.filter = 'none';
         
         canvasContext.globalCompositeOperation = "source-in"
         canvasContext.drawImage(results.image, captureSizeW, 0, videoSizeW, videoSizeH)
         results.segmentationMask.close();
         results.image.close();
         
-        canvasContext.restore()
-
-        if(lastScreenFrame){
-            try{
-                canvasContext.drawImage(lastScreenFrame, 0, 0, captureSizeW, captureSizeH);
-            }catch(e){
-                console.debug(e)
-            }
-        }
+        canvasContext.globalCompositeOperation = "source-over"
     },
     virtBG(results){
         canvasContext.globalCompositeOperation = "copy"
         canvasContext.drawImage(virtualBGImage.value, captureSizeW, 0, videoSizeW, videoSizeH)
 
         canvasContext.globalCompositeOperation = "destination-out"
+        canvasContext.filter = 'blur(4px)';
         canvasContext.drawImage(results.segmentationMask, captureSizeW, 0, videoSizeW, videoSizeH)
-        
-        const thre = 100;
-        var id = canvasContext.getImageData(captureSizeW, 0, videoSizeW, videoSizeH)
-        for(let i = 3; i < id.data.length; i += 4){
-            id.data[i] = (id.data[i] > thre)? 255:0
-        }
-        canvasContext.putImageData(id, captureSizeW, 0)
+        canvasContext.filter = 'none';
         
         canvasContext.globalCompositeOperation = "destination-over"
         canvasContext.drawImage(results.image, captureSizeW, 0, videoSizeW, videoSizeH)
@@ -158,15 +146,9 @@ const background = {
         canvasContext.drawImage(results.image, captureSizeW, 0, videoSizeW, videoSizeH)
 
         canvasContext.globalCompositeOperation = "destination-out"
-        canvasContext.filter = 'none';
+        canvasContext.filter = 'blur(4px)';
         canvasContext.drawImage(results.segmentationMask, captureSizeW, 0, videoSizeW, videoSizeH)
-        
-        const thre = 100;
-        var id = canvasContext.getImageData(captureSizeW, 0, videoSizeW, videoSizeH)
-        for(let i = 3; i < id.data.length; i += 4){
-            id.data[i] = (id.data[i] > thre)? 255:0
-        }
-        canvasContext.putImageData(id, captureSizeW, 0)
+        canvasContext.filter = 'none';
         
         canvasContext.globalCompositeOperation = "destination-over"
         canvasContext.drawImage(results.image, captureSizeW, 0, videoSizeW, videoSizeH)
