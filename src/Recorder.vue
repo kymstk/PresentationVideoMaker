@@ -364,7 +364,7 @@ watch(selectedVideo, (newSelection) => {
                 width: videoSizeW,
                 height: videoSizeH,
                 deviceId: newSelection,
-                frameRate: frameRate.max,
+                frameRate: (bgSegmenter)? frameRate.min : frameRate.max,
             }
         }).then((video) => {
             console.log(video);
