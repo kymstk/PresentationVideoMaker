@@ -801,6 +801,11 @@ function onBackgroundImageFileSelected(event){
     createImageBitmap(event.target.files[0]).then((img) => virtualBGImage.value = img);
     background.setVirtual();
 }
+
+function onSelectVirtualBackground(event){
+    if( !virtualBGImage.value )
+        button_bgImage.value.dispatchEvent(new window.MouseEvent('click'))
+}
 </script>
 
 <template>
@@ -871,12 +876,12 @@ function onBackgroundImageFileSelected(event){
                     そのまま
                 </label>
                 <label class="block my-1">
-                    <input type="radio" value="virtual" v-model="background_state" />
+                    <input type="radio" value="virtual" v-model="background_state" @click="onSelectVirtualBackground"/>
                     仮想背景
                     <label class="px-3 my-1 bg-blue-900 ">
-                        <input type="file" class="hidden" accept="image/gif, image/jpeg, image/png" @change="onBackgroundImageFileSelected"/>
-                        <span :class="{hidden: virtualBGImage == null}">&#x1F5F9;&#xFE0E;</span>
-                        <span :class="{hidden: virtualBGImage != null}">&#x1F4C4;&#xFE0E;</span>
+                        <input ref="button_bgImage" type="file" class="hidden" accept="image/gif, image/jpeg, image/png" @change="onBackgroundImageFileSelected"/>
+                        <span name="check" :class="{hidden: virtualBGImage == null}">&#x2714;&#xFE0E;</span> 
+                        <span name="file"  :class="{hidden: virtualBGImage != null}">&#x1F4C4;&#xFE0E;</span>
                         背景画像を選択
                     </label>
                 </label>
