@@ -52,16 +52,26 @@ const button_download = ref(null);
 const button_bgImage = ref(null);
 
 // 録画関係
-const frameRate = {max: 24, min: 10};
+const frameRate = {max: 24, min: 10, recording: 24};
+const drawScreen = {
+    recordingInterval: 10 ** 6 / frameRate.recording, // frame 間隔(micro sec)
+    duration: 0,
+    reset(){ this.duration = 0; },
+    didIt(){ this.duration = this.recordingInterval; },
+    judge(d){
+        this.duration -= d;
+        return this.duration <= d;
+    }
+};
 const tracks = shallowReactive({
     screen: null,
+    screenMedia: null,
     video: null,
     microphone: null,
     canvas: null,
 })
 let videoTrackProcessor = null;
-let screenTrackProcessor = null;
-let lastScreenFrame = null;
+let audioTrackProcessor = null;
 let canvasContext = null;
 let mimeType = null;
 const recording = shallowReactive({
@@ -115,6 +125,8 @@ const background = {
         results.image.close();
         
         canvasContext.globalCompositeOperation = "source-over"
+        canvasContext.drawImage(replayVideo.value, 0, 0, captureSizeW, captureSizeH);
+        drawScreen.didIt();
     },
     virtBG(results){
         canvasContext.globalCompositeOperation = "copy"
@@ -132,13 +144,8 @@ const background = {
         results.image.close();
         
         canvasContext.globalCompositeOperation = "source-over"
-        if(lastScreenFrame){
-            try{
-                canvasContext.drawImage(lastScreenFrame, 0, 0, captureSizeW, captureSizeH);
-            }catch(e){
-                console.debug(e)
-            }
-        }
+        canvasContext.drawImage(replayVideo.value, 0, 0, captureSizeW, captureSizeH);
+        drawScreen.didIt();
     },
     blurBG(results){
         canvasContext.globalCompositeOperation = "copy"
@@ -152,18 +159,13 @@ const background = {
         
         canvasContext.globalCompositeOperation = "destination-over"
         canvasContext.drawImage(results.image, captureSizeW, 0, videoSizeW, videoSizeH)
-
+        
         results.segmentationMask.close();
         results.image.close();
 
         canvasContext.globalCompositeOperation = "source-over"
-        if(lastScreenFrame){
-            try{
-                canvasContext.drawImage(lastScreenFrame, 0, 0, captureSizeW, captureSizeH);
-            }catch(e){
-                console.debug(e)
-            }
-        }
+        canvasContext.drawImage(replayVideo.value, 0, 0, captureSizeW, captureSizeH);
+        drawScreen.didIt();
     },
     getProcessor(){
         switch(this.state.value){
@@ -185,25 +187,25 @@ const background = {
     },
     setupBgSegmenter(){
         const bgProcessor = this.getProcessor();
-    if(bgProcessor){
-        if(bgSegmenter == null){
-            bgSegmenter = new SelfieSegmentation({locateFile: (file) => {
-                return `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`;
-            }});
-            bgSegmenter.setOptions({
-                //   modelSelection: 0, // general model
-                modelSelection: 1, // landscape model
-            });
+        if(bgProcessor){
+            if(bgSegmenter == null){
+                bgSegmenter = new SelfieSegmentation({locateFile: (file) => {
+                    return `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`;
+                }});
+                bgSegmenter.setOptions({
+                    //   modelSelection: 0, // general model
+                    modelSelection: 1, // landscape model
+                });
                 if(tracks.video)
-                        tracks.video.forEach(track => track.applyConstraints({
-                            frameRate: frameRate.min,
-                            width: videoSizeW,
-                            height: videoSizeH,
-                        }));
-        }
+                    tracks.video.forEach(track => track.applyConstraints({
+                        frameRate: frameRate.min,
+                        width: videoSizeW,
+                        height: videoSizeH,
+                    }));
+            }
 
             bgSegmenter.reset();
-        bgSegmenter.onResults(bgProcessor);
+            bgSegmenter.onResults(bgProcessor);
             bgSegmenterReady = true;
         }else{
             this.closeBgSegmenter();
@@ -211,9 +213,9 @@ const background = {
     },
     closeBgSegmenter(){
         if(bgSegmenter){
-        bgSegmenter.close();
-        bgSegmenter = null;
-    }
+            bgSegmenter.close();
+            bgSegmenter = null;
+        }
         if(tracks.video){
             tracks.video.forEach(track => track.applyConstraints({ // reset fps
                 frameRate: frameRate.max,
@@ -352,6 +354,8 @@ watch(selectedVideo, (newSelection) => {
         }
         tracks.video = null;
         background.closeBgSegmenter();
+
+        setScreenMedia2VideoAndVisibleProperly();
     }
     else{
         previewSizeW.value = captureSizeW + videoSizeW;
@@ -388,24 +392,23 @@ watch(selectedVideo, (newSelection) => {
                     if(bgSegmenter){
                         if(bgSegmenterReady){
                             bgSegmenterReady = false;
-                        createImageBitmap(videoFrame).then((bitmap) => {
+                            createImageBitmap(videoFrame).then((bitmap) => {
                                 bgSegmenter.send({image: bitmap}).finally(()=>{
-                                videoFrame.close();
-                                bitmap.close()
+                                    videoFrame.close();
+                                    bitmap.close()
                                     bgSegmenterReady = true;
+                                });
                             });
-                        });
-                    }else{
+                        }else{
                             videoFrame.close();
                         }
                     }else{
                         canvasContext.globalCompositeOperation = "copy"
                         canvasContext.drawImage(videoFrame, captureSizeW, 0, videoSizeW, videoSizeH);
 
-                        if(lastScreenFrame){
-                            canvasContext.globalCompositeOperation = "source-over"
-                            canvasContext.drawImage(lastScreenFrame, 0, 0, captureSizeW, captureSizeH);
-                        }
+                        canvasContext.globalCompositeOperation = "source-over"
+                        canvasContext.drawImage(replayVideo.value, 0, 0, captureSizeW, captureSizeH);
+                        drawScreen.didIt();
 
                         videoFrame.close();
                     }
@@ -420,15 +423,15 @@ watch(selectedVideo, (newSelection) => {
                         bgSegmenter.close();
                         bgSegmenter = null;
                     }
-                    if(lastScreenFrame)
-                        canvasContext.drawImage(lastScreenFrame, 0, 0, captureSizeW, captureSizeH);
                 },
                 abort(err){
                     console.log('writable stream for video was aborted:', err);
                     this.close()
                 },
             }));
-        })
+
+            setScreenMedia2VideoAndVisibleProperly();
+        });
     }
 })
 
@@ -509,25 +512,25 @@ watch(microphoneSelections, () => {
         const media = await navigator.mediaDevices.getUserMedia({video:true, audio:true});
         media.getTracks().forEach((track) => track.stop());
 
-    // デバイスリストを取得して、そのうちカメラデバイスのみを選択リストに追加
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    devices.forEach((device) => {
-        if(device.kind == 'videoinput'){
-            videoSelections[device.deviceId] = device.label
-            if(device.deviceId == 'default')
-                selectedVideo.value = 'default'
-        }
-        if(device.kind == 'audioinput'){
-            microphoneSelections[device.deviceId] = device.label
-            if(device.deviceId == 'default')
-                selectedMIC.value = 'default'
-        }
-        if(device.kind == 'audiooutput'){
-            speakerSelections[device.deviceId] = device.label
-            if(device.deviceId == 'default')
-                selectedSPK.value = 'default'
-        }
-    });
+        // デバイスリストを取得して、そのうちカメラデバイスのみを選択リストに追加
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        devices.forEach((device) => {
+            if(device.kind == 'videoinput'){
+                videoSelections[device.deviceId] = device.label
+                if(device.deviceId == 'default')
+                    selectedVideo.value = 'default'
+            }
+            if(device.kind == 'audioinput'){
+                microphoneSelections[device.deviceId] = device.label
+                if(device.deviceId == 'default')
+                    selectedMIC.value = 'default'
+            }
+            if(device.kind == 'audiooutput'){
+                speakerSelections[device.deviceId] = device.label
+                if(device.deviceId == 'default')
+                    selectedSPK.value = 'default'
+            }
+        });
     }catch(err){
         // console.log({ error:err })
         if(err.name == 'NotAllowedError')
@@ -588,6 +591,7 @@ function onScreenButtonClick(){
         video: true,
     }).then((media) => {
         console.log(media);
+        tracks.screenMedia = media;
 
         if(tracks.screen){
             tracks.screen.forEach((track) => track.stop());
@@ -609,37 +613,28 @@ function onScreenButtonClick(){
         if(canvasContext == null){
             canvasContext = previewCanvas.value.getContext('2d');
         }
-        if(screenTrackProcessor != null && !screenTrackProcessor.readable.locked){
-            screenTrackProcessor.readable.cancel();
-        }
-        screenTrackProcessor = new MediaStreamTrackProcessor({ track: video });
 
-        screenTrackProcessor.readable.pipeTo(new WritableStream({
-            start() {
-                console.log('writable stream for screen started');
-            },
-            write(screenFrame){
-                if(lastScreenFrame)
-                    lastScreenFrame.close();
-                if( !videoTrackProcessor ){
-                    canvasContext.globalCompositeOperation = "copy"
-                    canvasContext.drawImage(screenFrame, 0, 0, captureSizeW, captureSizeH);
-                }
-                lastScreenFrame = screenFrame;
-            },
-            close(){
-                if(lastScreenFrame){
-                    lastScreenFrame.close();
-                    lastScreenFrame = null;
-                }
-                canvasContext.clearRect(0, 0, captureSizeW, captureSizeH);
-                console.log('writable stream for screen was closed');
-            },
-            abort(err){
-                console.log('writable stream for screen was aborted:', err);
-            },
-        }));
+        setScreenMedia2VideoAndVisibleProperly();
     })
+}
+
+function setScreenMedia2VideoAndVisibleProperly(){
+    if( tracks.screenMedia){
+        replayVideo.value.srcObject = tracks.screenMedia;
+        replayVideo.value.play();
+    }
+    replayVideo.value.controls = false;
+
+    if( videoTrackProcessor ){
+        console.log('vtp is there!');
+        replayVideoStyle.visible = false;
+        previewCanvasStyle.visible = true;
+    }
+    else{
+        console.log('vtp is NOT!');
+        replayVideoStyle.visible = true;
+        previewCanvasStyle.visible = false;
+    }
 }
 
 function onStopButtonClick(event){
@@ -647,11 +642,10 @@ function onStopButtonClick(event){
         recording.recorder.stop();
     }
     else if(nowPlaying.value){
-        previewCanvasStyle.visible = true;
-        replayVideoStyle.visible = false;
-
         replayVideo.value.pause();
         nowPlaying.value = false;
+
+        setScreenMedia2VideoAndVisibleProperly();
     }
 }
 
@@ -686,7 +680,7 @@ async function onRecordButtonClick(event){
         if(selectedMIC.value == null){
             alert('使用するマイクを選択してください')
             return false;
-    }
+        }
     }
     const micMedia = await navigator.mediaDevices.getUserMedia({
         video: false,
@@ -697,11 +691,45 @@ async function onRecordButtonClick(event){
         },
     });
     tracks.microphone = micMedia.getAudioTracks();
-    tracks.microphone.forEach(track => recordingTracks.push(track))
+    const audioTrack = tracks.microphone[0];
+    recordingTracks.push(audioTrack);
     console.log('add mic');
-    //tracks.microphone.forEach((track) => recordingTracks.push(track));
+
+    /* 
+      録画時は、screen capture の映像は、MIC の MSP を tic 代わりに使って canvas に転写する。
+      これは、screen capture の video trac の MSP だと間隔が不揃いになってまともな録画データが得られないため。
+      MIC の MSP は開発環境で確認した限り 10msec 毎に write するので、screen capture を draw するには頻度が
+      高すぎることから、録画の frame rate 程度にまで描画頻度を落とす。
+    */
+    drawScreen.reset();
+    if(audioTrackProcessor != null && !audioTrackProcessor.readable.locked){
+        audioTrackProcessor.readable.cancel();
+    }
+    audioTrackProcessor = new MediaStreamTrackProcessor({ track: audioTrack });
+    audioTrackProcessor.readable.pipeTo(new WritableStream({
+        start() {
+            console.log('writable stream for audio started');
+        },
+        write(audioData){
+            if(drawScreen.judge(audioData.duration)){
+                canvasContext.globalCompositeOperation = "source-over"
+                canvasContext.drawImage(replayVideo.value, 0, 0, captureSizeW, captureSizeH);
+                drawScreen.didIt();
+            }
+        },
+        close(){
+            canvasContext.clearRect(0, 0, captureSizeW, captureSizeH);
+            console.log('writable stream for audio was closed');
+        },
+        abort(err){
+            console.log('writable stream for audio was aborted:', err);
+        },
+    }));
+
+    previewCanvasStyle.visible = true;
+    replayVideoStyle.visible = false;
     
-    const canvasMedia = previewCanvas.value.captureStream(frameRate.max);
+    const canvasMedia = previewCanvas.value.captureStream(frameRate.recording);
     tracks.canvas = canvasMedia.getTracks();
 
     tracks.canvas.forEach((track) => recordingTracks.push(track));
@@ -734,7 +762,7 @@ async function onRecordButtonClick(event){
         }
 
         if(recording.blob.length > 0 && recording.blob.every(t => t.size > 0))
-        recording.objectURL = URL.createObjectURL(new Blob(recording.blob, { type: mimeType }));
+            recording.objectURL = URL.createObjectURL(new Blob(recording.blob, { type: mimeType }));
 
         buttons_pause.value.style.animationName = '';
         recording.recorder = null;
@@ -763,12 +791,14 @@ function onPlayButtonClick(event){
         return;
     }
 
-    if(! replayVideoStyle.visible){
+    if(! replayVideoStyle.visible || ! replayVideo.value.controls ){
         replayVideo.value.src = recording.objectURL;
+        replayVideo.value.srcObject = null;
 
         previewCanvasStyle.visible = false;
         replayVideoStyle.visible = true;
     }
+    replayVideo.value.controls = true;
 
     replayVideo.value.play();
     nowPlaying.value = true;
