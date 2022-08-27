@@ -26,7 +26,7 @@ const mediaDenied = ref(false);
 // states
 const nowRecordable = computed(() => ( tracks.screen != null ))
 const nowRecording = computed(() => (recording.recorder != null && recording.recorder.state != 'inactive'));
-const nowPlayable = computed(() => (recording.blob != null && !nowRecording.value));
+const nowPlayable = computed(() => (recording.objectURL != null && !nowRecording.value));
 const nowPlaying = ref(false);
 
 // variables for 'ref' binding
@@ -695,6 +695,7 @@ async function onRecordButtonClick(event){
     recording.blob = new Array();
     if(recording.objectURL != null){
         URL.revokeObjectURL(recording.objectURL);
+        recording.objectURL = null;
     }
 
     const recordingTracks = Array();
@@ -750,7 +751,9 @@ async function onRecordButtonClick(event){
             tracks.microphone = null;
         }
 
+        if(recording.blob.length > 0 && recording.blob.every(t => t.size > 0))
         recording.objectURL = URL.createObjectURL(new Blob(recording.blob, { type: mimeType }));
+
         buttons_pause.value.style.animationName = '';
         recording.recorder = null;
     }
@@ -773,7 +776,7 @@ async function onRecordButtonClick(event){
 }
 
 function onPlayButtonClick(event){
-    if(recording.blob == null){
+    if(recording.objectURL == null){
         alert('録画データがありません');
         return;
     }
