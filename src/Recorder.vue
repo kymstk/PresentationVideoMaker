@@ -831,17 +831,17 @@ function onSelectVirtualBackground(event){
 <div ref="control" class="relative text-red-500 bg-slate-800 text-6xl font-sans px-2 bottom-0 hover:!opacity-100" :style="controlStyle">
     <!-- <button :disabled="recording" class="disabled:text-red-100 disabled:bg-slate-300 pb-2 px-2">◉</button>-->
     <span class="text-blue-500 absolute right-2 font-serif pt-1">
-        <button type="button" name="screen"     :disabled="nowPlaying" class="disabled:opacity-25 px-2" @click="onScreenButtonClick">&#x1F4BB;&#xFE0E;</button>
-        <button type="button" name="video"      :disabled="nowRecording | nowPlaying" class="disabled:opacity-25 px-2"  @click="onSelectorClick($event.target, 'videos')">&#x1F3A5;&#xFE0E;</button>
-        <button type="button" name="microphone" :disabled="nowRecording | nowPlaying" class="disabled:opacity-25 px-2"  @click="onSelectorClick($event.target, 'microphones')">&#x1F3A4;&#xFE0E;</button>
-        <button type="button" name="speaker"    :disabled="nowRecording" class="disabled:opacity-25 px-2 rotate-180 hidden" @click="onSelectorClick($event.target, 'speakers')">&#x1F56A;&#xFE0E;</button>
-        <a ref="button_download" class="px-2 cursor-pointer"  :class="{ 'opacity-25': !nowPlayable }" @click="onDownloadButtonClick">&#x1F4E5;&#xFE0E;</a>
-        <button type="button" id="menu" class="disabled:opacity-25 text-white px-2" @click="onSelectorClick($event.target, 'menu')">☰</button>
+        <button type="button" name="screen"     title="select capture"    :disabled="nowPlaying" class="disabled:opacity-25 px-2" @click="onScreenButtonClick">&#x1F4BB;&#xFE0E;</button>
+        <button type="button" name="video"      title="select video cam"  :disabled="nowRecording | nowPlaying" class="disabled:opacity-25 px-2"  @click="onSelectorClick($event.target, 'videos')">&#x1F3A5;&#xFE0E;</button>
+        <button type="button" name="microphone" title="select microphone" :disabled="nowRecording | nowPlaying" class="disabled:opacity-25 px-2"  @click="onSelectorClick($event.target, 'microphones')">&#x1F3A4;&#xFE0E;</button>
+        <button type="button" name="speaker"    title="select speaker"    :disabled="nowRecording" class="disabled:opacity-25 px-2 rotate-180 hidden" @click="onSelectorClick($event.target, 'speakers')">&#x1F56A;&#xFE0E;</button>
+        <a ref="button_download" title="download" class="px-2 cursor-pointer"  :class="{ 'opacity-25': !nowPlayable }" @click="onDownloadButtonClick">&#x1F4E5;&#xFE0E;</a>
+        <button type="button" id="menu" title="menu" class="disabled:opacity-25 text-white px-2" @click="onSelectorClick($event.target, 'menu')">☰</button>
     </span>
-    <button type="button" ref="buttons_record" :disabled="!(nowRecordable & !nowRecording & !nowPlaying)"  class="disabled:opacity-25 py-1 px-2" @click="onRecordButtonClick">◉</button>
-    <button type="button" ref="buttons_pause"  :disabled="!(nowRecording | nowPlaying)" class="disabled:opacity-25 pb-2 px-1 rotate-90 emphasis" @click="onPauseButtonClick">〓</button>
-    <button type="button" ref="buttons_stop"   :disabled="!(nowRecording | nowPlaying)" class="disabled:opacity-25 pb-2 px-2" @click="onStopButtonClick">◼</button>
-    <button type="button" ref="buttons_play"   :disabled="!(nowPlayable)"  class="disabled:opacity-25 pb-2 px-2" @click="onPlayButtonClick">▶</button>
+    <button type="button" ref="buttons_record" title="start recording" :disabled="!(nowRecordable & !nowRecording & !nowPlaying)"  class="disabled:opacity-25 py-1 px-2" @click="onRecordButtonClick">◉</button>
+    <button type="button" ref="buttons_pause"  title="pause"           :disabled="!(nowRecording | nowPlaying)" class="disabled:opacity-25 pb-2 px-1 rotate-90 emphasis" @click="onPauseButtonClick">〓</button>
+    <button type="button" ref="buttons_stop"   title="stop"            :disabled="!(nowRecording | nowPlaying)" class="disabled:opacity-25 pb-2 px-2" @click="onStopButtonClick">◼</button>
+    <button type="button" ref="buttons_play"   title="play"            :disabled="!(nowPlayable)"  class="disabled:opacity-25 pb-2 px-2" @click="onPlayButtonClick">▶</button>
 </div>
 <div class="static">
     <select size=2
@@ -893,7 +893,7 @@ function onSelectVirtualBackground(event){
                 <label class="block my-1">
                     <input type="radio" value="virtual" v-model="background_state" @click="onSelectVirtualBackground"/>
                     仮想背景
-                    <label class="px-3 my-1 bg-blue-900 ">
+                    <label class="px-3 my-1 bg-blue-900 cursor-pointer">
                         <input ref="button_bgImage" type="file" class="hidden" accept="image/gif, image/jpeg, image/png" @change="onBackgroundImageFileSelected"/>
                         <span name="check" :class="{hidden: virtualBGImage == null}">&#x2714;&#xFE0E;</span> 
                         <span name="file"  :class="{hidden: virtualBGImage != null}">&#x1F4C4;&#xFE0E;</span>
